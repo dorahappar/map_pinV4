@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Leaflet CSV読み込み・番号付きピン（iPhone対応版）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 10px;
+      text-align: center;
+    }
+    #map {
+      height: 400px;
+      margin-top: 10px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+    }
+    .number-marker {
+      background-color: #2a93ee;
+      color: white;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      text-align: center;
+      line-height: 24px;
+      font-weight: bold;
+      border: 2px solid white;
+      font-size: 14px;
+      box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+    }
+    input[type="file"] {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+      <input type="file" id="csvfile" accept=".csv" />
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script>
+    // 地図初期化
+    const map = L.map("map").setView([35.681236, 139.767125], 12);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    // CSVファイル選択イベント
+    document.getElementById("csvfile").addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) {
+        alert("ファイルが選択されていません。");
+        return;
+      }
+
+      // PapaParseでCSVを解析
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        encoding: "UTF-8", // Shift_JISの場合は "Shift_JIS" に変更
+        worker: true, // iPhone/Safari向け安定化
+        complete: (results) => {
+          if (!results.data || results.data.length === 0) {
+            alert("CSVの内容を読み取れませんでした。\nUTF-8形式で保存されていますか？");
+            return;
+          }
+
+          const data = results.data.map((row) => ({
+            no: row["No"] || row["no"],
+            date: row["日時"] || row["日付"] || "",
+            lat: parseFloat(row["緯度"]),
+            lng: parseFloat(row["経度"]),
+            memo: row["音声メモ"] || row["メモ"] || "",
+          }));
+
+          // 有効データのみに絞る
+          const valid = data.filter((d) => !isNaN(d.lat) && !isNaN(d.lng));
+          if (valid.length === 0) {
+            alert("有効な緯度・経度データが見つかりません。");
+            return;
+          }
+
+          // 最初の座標に移動
+          map.setView([valid[0].lat, valid[0].lng], 15);
+
+          // ピンを配置
+          valid.forEach((row) => {
+            const numberIcon = L.divIcon({
+              className: "number-marker",
+              html: row.no || "?",
+              iconSize: [24, 24],
+              iconAnchor: [12, 12],
+            });
+
+            L.marker([row.lat, row.lng], { icon: numberIcon })
+              .addTo(map)
+              .bindPopup(
+                `<b>No:</b> ${row.no || ""}<br>
+                 <b>日時:</b> ${row.date}<br>
+                 <b>緯度:</b> ${row.lat}<br>
+                 <b>経度:</b> ${row.lng}<br>
+                 <b>音声メモ:</b> ${row.memo}`
+              );
+          });
+        },
+        error: (err) => {
+          alert("CSVの読み込み中にエラーが発生しました: " + err.message);
+        },
+      });
+    });
+  </script>
+</body>
+</html>
